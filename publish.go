@@ -9,6 +9,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/wagslane/go-rabbitmq/internal/channelmanager"
 	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
+	"go.opentelemetry.io/otel"
 )
 
 // DeliveryMode. Transient means higher throughput but messages will not be
@@ -192,6 +193,12 @@ func (publisher *Publisher) PublishWithContext(
 		message.UserId = options.UserID
 		message.AppId = options.AppID
 
+		if options.Tracing {
+			// Check if span is being recorded, otherwise create a new one.
+			trace := extractTraceFromContex(ctx)
+			message.Headers = tableToAMQPTable(mergeTables(options.Headers, trace))
+		}
+
 		// Actual publish.
 		err := publisher.chanManager.PublishWithContextSafe(
 			ctx,
@@ -231,7 +238,10 @@ func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 		return nil, fmt.Errorf("publishing blocked due to TCP block on the server")
 	}
 
-	options := &PublishOptions{}
+	options := &PublishOptions{
+		Tracing: false,
+		Tracer:  otel.GetTracerProvider(),
+	}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
@@ -257,6 +267,14 @@ func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 		message.Type = options.Type
 		message.UserId = options.UserID
 		message.AppId = options.AppID
+
+		if options.Tracing {
+			// Check if span is being recorded, otherwise create a new one.
+			trace := extractTraceFromContex(ctx)
+
+			// Replace the headers with the merged headers with trace
+			message.Headers = tableToAMQPTable(mergeTables(options.Headers, trace))
+		}
 
 		// Actual publish.
 		conf, err := publisher.chanManager.PublishWithDeferredConfirmWithContextSafe(
@@ -354,4 +372,10 @@ func (publisher *Publisher) startPublishHandler() {
 			})
 		}
 	}()
+}
+
+func extractTraceFromContex(ctx context.Context) Table {
+	carrier := make(Table)
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	return carrier
 }

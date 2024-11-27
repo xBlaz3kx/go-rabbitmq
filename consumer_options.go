@@ -29,6 +29,7 @@ func getDefaultConsumerOptions(queueName string) ConsumerOptions {
 		ExchangeOptions: []ExchangeOptions{},
 		Concurrency:     1,
 		CloseGracefully: true,
+		Tracing:         false,
 		Logger:          stdDebugLogger{},
 		QOSPrefetch:     10,
 		QOSGlobal:       false,
@@ -69,6 +70,7 @@ type ConsumerOptions struct {
 	ExchangeOptions       []ExchangeOptions
 	Concurrency           int
 	Logger                logger.Logger
+	Tracing               bool
 	QOSPrefetch           int
 	QOSGlobal             bool
 }
@@ -317,6 +319,11 @@ func WithConsumerOptionsQOSGlobal(options *ConsumerOptions) {
 // the handler to complete in consumer.Close
 func WithConsumerOptionsForceShutdown(options *ConsumerOptions) {
 	options.CloseGracefully = false
+}
+
+// WithConsumerOptionsTracing sets the consumer to trace messages
+func WithConsumerOptionsTracing(options *ConsumerOptions) {
+	options.Tracing = true
 }
 
 // WithConsumerOptionsQueueQuorum sets the queue a quorum type, which means

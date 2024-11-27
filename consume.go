@@ -8,13 +8,14 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/wagslane/go-rabbitmq/internal/channelmanager"
+	"go.opentelemetry.io/otel"
 )
 
 // Action is an action that occurs after processed this delivery
 type Action int
 
 // Handler defines the handler of each Delivery and return Action
-type Handler func(d Delivery) (action Action)
+type Handler func(ctx context.Context, d Delivery) (action Action)
 
 const (
 	// Ack default ack this msg after you have successfully processed this delivery.
@@ -84,12 +85,12 @@ func NewConsumer(
 // Run starts consuming with automatic reconnection handling. Do not reuse the
 // consumer for anything other than to close it.
 func (consumer *Consumer) Run(handler Handler) error {
-	handlerWrapper := func(d Delivery) (action Action) {
+	handlerWrapper := func(ctx context.Context, d Delivery) (action Action) {
 		if !consumer.handlerMu.TryRLock() {
 			return NackRequeue
 		}
 		defer consumer.handlerMu.RUnlock()
-		return handler(d)
+		return handler(ctx, d)
 	}
 
 	err := consumer.startGoroutines(
@@ -233,12 +234,18 @@ func handlerGoroutine(consumer *Consumer, msgs <-chan amqp.Delivery, consumeOpti
 			break
 		}
 
+		ctx := context.Background()
+
+		if consumeOptions.Tracing {
+			ctx = injectTraceFromHeaders(ctx, Table(msg.Headers))
+		}
+
 		if consumeOptions.RabbitConsumerOptions.AutoAck {
-			handler(Delivery{msg})
+			handler(ctx, Delivery{msg})
 			continue
 		}
 
-		switch handler(Delivery{msg}) {
+		switch handler(ctx, Delivery{msg}) {
 		case Ack:
 			err := msg.Ack(false)
 			if err != nil {
@@ -275,4 +282,9 @@ func (consumer *Consumer) waitForHandlerCompletion(ctx context.Context) error {
 	case <-c:
 		return nil
 	}
+}
+
+// injectTraceFromHeaders
+func injectTraceFromHeaders(ctx context.Context, carrier Table) context.Context {
+	return otel.GetTextMapPropagator().Extract(ctx, carrier)
 }

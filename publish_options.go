@@ -2,6 +2,8 @@ package rabbitmq
 
 import (
 	"time"
+
+	sdktrace "go.opentelemetry.io/otel/trace"
 )
 
 // PublishOptions are used to control how data is published
@@ -26,7 +28,7 @@ type PublishOptions struct {
 	Priority uint8
 	// correlation identifier
 	CorrelationID string
-	// address to to reply to (ex: RPC)
+	// address to reply to (ex: RPC)
 	ReplyTo string
 	// message identifier
 	MessageID string
@@ -41,6 +43,12 @@ type PublishOptions struct {
 	// Application or exchange specific fields,
 	// the headers exchange will inspect this field.
 	Headers Table
+
+	// Tracing enables tracing for the message
+	Tracing bool
+
+	// Tracer is the tracer. If no tracer is provided and tracing is enabled, the globally configured tracer is used
+	Tracer sdktrace.TracerProvider
 }
 
 // WithPublishOptionsExchange returns a function that sets the exchange to publish to
@@ -152,5 +160,17 @@ func WithPublishOptionsUserID(userID string) func(*PublishOptions) {
 func WithPublishOptionsAppID(appID string) func(*PublishOptions) {
 	return func(options *PublishOptions) {
 		options.AppID = appID
+	}
+}
+
+// WithPublishOptionsTracing returns a function that enables tracing for the message
+func WithPublishOptionsTracing(options *PublishOptions) {
+	options.Tracing = true
+}
+
+// WithPublishOptionsTracer returns a function that sets the tracer for the message
+func WithPublishOptionsTracer(tracer sdktrace.TracerProvider) func(*PublishOptions) {
+	return func(options *PublishOptions) {
+		options.Tracer = tracer
 	}
 }
