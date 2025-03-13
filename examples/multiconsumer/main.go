@@ -8,7 +8,7 @@ import (
 	"sync"
 	"syscall"
 
-	rabbitmq "github.com/wagslane/go-rabbitmq"
+	rabbitmq "github.com/xBlaz3kx/go-rabbitmq"
 )
 
 func main() {
